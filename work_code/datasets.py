@@ -32,13 +32,14 @@ class office_loader(Dataset):
 
 
 class feature_dataset(Dataset):
-    def __init__(self, features, labels, transform=None):
+    def __init__(self, features, labels, transform=None, device = "cpu"):
         self.features = features
         self.labels = labels
+        self.device = device
             
     def __getitem__(self,idx):
         feature, label = self.features[idx], self.labels[idx]
-        return torch.tensor(feature), label
+        return torch.tensor(feature).to(self.device), torch.tensor(label).to(self.device)
     
     def __len__(self):
         return len(self.features)
