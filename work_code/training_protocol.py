@@ -224,22 +224,20 @@ class training_protocol():
             for i, data in enumerate(target_loader, 0):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, _ = data[0].float(), data[1]
-                source_inputs, target_inputs = self.check_confidence(inputs, Ct, 0.4, source_index_dict, source_features)
-                print(inputs.shape, source_inputs.shape)
+                source_inputs, target_inputs = self.check_confidence(inputs, Ct, 0.0, source_index_dict, source_features)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
                 if(len(source_inputs)==0):
                     continue
+                perm = np.random.permutation(len(source_inputs))
                 source_content, source_style = Cs(source_inputs).detach(), Ss(source_inputs).detach()
                 target_content, target_style = Ct(target_inputs), St(target_inputs)
-                X1, X2, X3 = source_inputs,  Rt(target_content, source_style), Rt(source_content, target_style) 
+                X1, X2 = source_inputs,  Rt(source_content[perm], source_style) 
                 Labels = torch.tensor(np.ones(len(source_inputs)), dtype = int).to(self.device)
                 
-                # source_labels, target_labels, X2_labels, X3_labels = torch.max(m(Cs(source_inputs)), 1), torch.max(m(Cs(target_inputs)), 1), torch.max(m(Cs(X2)), 1), torch.max(m(Cs(X3)), 1)
-                # pdb.set_trace()
-                
                 logits = CD(X1, X2)
+                pdb.set_trace()
                 loss = loss_(logits, Labels)
                 loss.backward()
                 optimizer.step()

@@ -108,6 +108,6 @@ ti = training_protocol(device)
 #ti.train_style_module(data_loader = features_loader, C = Cs, S = Ss, R = Rs, adv_clf = adv_clf, epochs=200)
 #ti.train_class_differentiator_module(data_loader = source_features_loader, CD = CD, epochs = 6000)
 
-ti.test_style(target_features_loader, Ss, adv_clf)
+#ti.test_style(target_features_loader, Ss, adv_clf)
 
-#ti.train(source_index_dict, source_features, source_labels, target_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs=100)
+ti.train(source_index_dict, source_features, source_labels, target_features_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs=100)
