@@ -14,7 +14,7 @@ import pickle
 import random
 from datasets import office_loader, feature_dataset
 from feature_extractor import VGG_FeatureExtractor
-from modules import content_module, style_module, reconstruction 
+from modules import content_module, style_module, reconstruction, content_classifier_module
 from modules import adv_classifier_module, domain_identifier_module, class_differentiator_module
 from training_protocol import training_protocol
 from testing import Test
@@ -84,30 +84,39 @@ source_features_loader = DataLoader(source_features_dataset, batch_size = 512, s
 target_features_loader = DataLoader(target_features_dataset, batch_size = 512, shuffle = True)
 
 Cs = content_module().to(device)
+content_clf = content_classifier_module().to(device)
 Ss = style_module().to(device)
 Rs = reconstruction().to(device)
 adv_clf = adv_classifier_module().to(device)
-Cs.load_state_dict(torch.load("../modules/Cs_module"))
-Ss.load_state_dict(torch.load("../modules/Ss_module"))
-Rs.load_state_dict(torch.load("../modules/Rs_module"))
-adv_clf.load_state_dict(torch.load("../modules/adv_clf"))
 
-Ct = content_module().to(device)
-St = style_module().to(device)
-Rt = reconstruction().to(device)
-Ct.load_state_dict(Cs.state_dict())
-St.load_state_dict(Ss.state_dict())
-Rt.load_state_dict(Rs.state_dict())
+# Cs.load_state_dict(torch.load("../modules/Cs_module"))
+# content_clf.load_state_dict(torch.load("../modules/content_clf_module"))
+
+# Ss.load_state_dict(torch.load("../modules/Ss_module"))
+# Rs.load_state_dict(torch.load("../modules/Rs_module"))
+# adv_clf.load_state_dict(torch.load("../modules/adv_clf"))
+
+# Ct = content_module().to(device)
+# St = style_module().to(device)
+# Rt = reconstruction().to(device)
+# Ct.load_state_dict(Cs.state_dict())
+# St.load_state_dict(Ss.state_dict())
+# Rt.load_state_dict(Rs.state_dict())
 
 CD = class_differentiator_module().to(device)
-CD.load_state_dict(torch.load("../modules/CD_module"))
+# CD.load_state_dict(torch.load("../modules/CD_module"))
 ti = training_protocol(device)
 
 
-#ti.train_content_module(data_loader = source_features_loader, C = Cs, epochs=500)
-#ti.train_style_module(data_loader = features_loader, C = Cs, S = Ss, R = Rs, adv_clf = adv_clf, epochs=200)
-#ti.train_class_differentiator_module(data_loader = source_features_loader, CD = CD, epochs = 6000)
+# ti.train_content_module(data_loader = source_features_loader, C = Cs, content_clf= content_clf, epochs=200)
+# ti.train_style_module(data_loader = source_features_loader, C = Cs, S = Ss, R = Rs, adv_clf = adv_clf, epochs=1000)
+# train_class_differentiator_module(source_features_loader, CD, epochs=1000)
 
-#ti.test_style(target_features_loader, Ss, adv_clf)
 
-ti.train(source_index_dict, source_features, source_labels, target_features_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs=100)
+ti.test_content(target_features_loader, Cs, content_clf)
+# ti.test_style(target_features_loader, Ss, adv_clf)
+# ti.test_class_differentiator_module(data_loader = source_features_loader, CD = CD, epochs = 6000)
+
+ti.train(source_index_dict, source_features, source_labels, target_features_loader, Cs,content_clf, Ss, Rs, Ct, St, Rt, CD, epochs=500)
+# Ct.load_state_dict(torch.load("../modules/Ct_module"))
+ti.test_content(target_features_loader, Ct, content_clf)

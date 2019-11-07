@@ -8,17 +8,29 @@ import os
 import pdb
 
 class content_module(nn.Module):
-    def __init__(self, feat_dim=4096, num_classes=31):
+    def __init__(self, feat_dim=4096, content_dim=31):
         super(content_module, self).__init__()
         self.feat_dim = feat_dim
-        self.num_classes = num_classes
+        self.content_dim = content_dim
         self.fc1 = nn.Linear(self.feat_dim,int(self.feat_dim/4))
-        self.fc2 = nn.Linear(int(self.feat_dim/4), self.num_classes)
+        self.fc2 = nn.Linear(int(self.feat_dim/4), self.content_dim)
     
     def forward(self, x):
-        h_1 = F.relu(self.fc1(x))
+        h_1 = (F.relu(self.fc1(x)))
         content = F.relu(self.fc2(h_1))
         return content
+
+class content_classifier_module(nn.Module):
+    def __init__(self, num_classes=31, content_dim = 31):
+        super(content_classifier_module, self).__init__()
+        self.content_dim = content_dim
+        self.num_classes = num_classes
+        self.fc1 = nn.Linear(self.content_dim, self.num_classes)
+    
+    def forward(self, x):
+        logits = (self.fc1(x))
+        return logits
+
 
 class style_module(nn.Module):
     def __init__(self, feat_dim=4096, style_dim = 100):
@@ -34,18 +46,18 @@ class style_module(nn.Module):
         return style
 
 class reconstruction(nn.Module):
-    def __init__(self, feat_dim=4096, num_classes = 31, style_dim = 100):
+    def __init__(self, feat_dim=4096, content_dim = 31, style_dim = 100):
         super(reconstruction, self).__init__()
         self.feat_dim = feat_dim
         self.style_dim = style_dim
-        self.num_classes = num_classes
-        self.input_dim = style_dim + num_classes
+        self.content_dim = content_dim
+        self.input_dim = style_dim + content_dim
         self.fc1 = nn.Linear(self.input_dim, int(self.feat_dim/4))
         self.fc2 = nn.Linear(int(self.feat_dim/4), self.feat_dim)
     
     def forward(self, content, style):
         m = nn.Softmax(dim=1)
-        x = torch.cat((m(content), style), 1)
+        x = torch.cat((content, style), 1)
         h_1 = F.relu(self.fc1(x))
         h_2 = F.relu(self.fc2(h_1))
         return h_2

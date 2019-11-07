@@ -73,11 +73,11 @@ class training_protocol():
                 print("epoch {} : Classification Loss {:2f}".format(epoch, np.mean(batch_loss)))
         print('Finished Training')
                     
-    def train_content_module(self, data_loader, C, epochs):
+    def train_content_module(self, data_loader, C, content_clf, epochs):
         print("Training Content Separator")
         loss_ = nn.CrossEntropyLoss().to(self.device)
-        params = list(C.parameters())
-        optimizer = optim.SGD(params, lr = 0.004)
+        params = list(C.parameters()) + list(content_clf.parameters())
+        optimizer = optim.SGD(params, lr = 0.001)
         epoch_loss = list()
         for epoch in range(epochs):  # loop over the dataset multiple times
             batch_loss = list()
@@ -88,7 +88,8 @@ class training_protocol():
                 optimizer.zero_grad()
                 # forward + backward + optimize
                 content = C(inputs)
-                loss = loss_(content, labels)
+                logits = content_clf(content)
+                loss = loss_(logits, labels)
                 loss.backward()
                 optimizer.step()
                 # print statistics
@@ -96,7 +97,9 @@ class training_protocol():
 
             if(epoch%5==0):
                 print("epoch {} : Classification Loss {:2f}".format(epoch, np.mean(batch_loss)))
+                #self.test_content(data_loader, C, content_clf)
         torch.save(C.state_dict(), "../modules/Cs_module")
+        torch.save(content_clf.state_dict(), "../modules/content_clf_module")
         print('Finished Training')
     
     def train_style_module(self, data_loader, C, S, R, adv_clf, epochs):
@@ -104,8 +107,9 @@ class training_protocol():
         loss_mse = nn.MSELoss().to(self.device)
         loss_cent = nn.CrossEntropyLoss().to(self.device)
         loss_ent = HLoss().to(self.device)
-        params = list(S.parameters()) + list(R.parameters()) + list(adv_clf.parameters())
-        optimizer = optim.Adam(params)
+        params = list(S.parameters()) + list(R.parameters())
+        optimizer_enc = optim.Adam(params)
+        optimizer_adv = optim.SGD(adv_clf.parameters(), lr = 0.001)
           
         epoch_adv_loss, epoch_rec_loss = list(), list()
         for epoch in range(epochs):  #loop over the dataset multiple times
@@ -114,18 +118,26 @@ class training_protocol():
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = data[0].float(), data[1]
                 # forward + backward + optimize
-                optimizer.zero_grad()
+                optimizer_enc.zero_grad()
+                optimizer_adv.zero_grad()
                 content = C(inputs).detach()
                 style = S(inputs)
                 inputs_hat = R(content, style)
                 logits = adv_clf(style)
                 loss1 = loss_mse(inputs, inputs_hat)
-                loss2 = -loss_ent((logits))
-                loss = loss1 + loss2
-                loss.backward()
-                optimizer.step()
-                batch_rec_loss.append(loss1.item())
-                batch_adv_loss.append(loss2.item())
+                loss2 = -loss_cent(logits, labels)
+                if(i%3==0):
+                    loss = loss1 + loss2
+                    loss.backward()
+                    optimizer_enc.step()
+                    batch_rec_loss.append(loss1.item())
+                    batch_adv_loss.append(loss2.item())
+                else:
+                    loss = -(loss2)
+                    loss.backward()
+                    optimizer_adv.step()
+                    batch_adv_loss.append(loss2.item())
+                
         
             if(epoch%5==0):
                 print("epoch {} : Adversarial Loss {:2f} Reconstruction Loss {:2f}".format(epoch, np.mean(batch_adv_loss),np.mean(batch_rec_loss)))   
@@ -134,15 +146,16 @@ class training_protocol():
         torch.save(adv_clf.state_dict(), "../modules/adv_clf")
         print('Finished Training')
     
-    def test_content(self, data_loader, C):
+    def test_content(self, data_loader, C, content_clf):
         correct = 0
         total = 0
         with torch.no_grad():
             for data in data_loader:
                 features, labels = data[0].float(), data[1]
-                content = C(features)
+                content = C(features).detach()
+                logits = content_clf(content)
                 m = nn.Softmax(dim=1)
-                outputs = m(content)
+                outputs = m(logits)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -198,8 +211,9 @@ class training_protocol():
                 print("epoch {} : Accuracy {:2f}".format(epoch, 100*(correct / total)))    
     
     
-    def check_confidence(self, inputs, Ct, confidence, source_index_dict, source_features):
+    def check_confidence(self, inputs, Ct,content_clf, confidence, source_index_dict, source_features):
         x = Ct(inputs).detach()
+        x = content_clf(x).detach()
         m = nn.Softmax(dim=1)
         x = m(x)
         values, indices = torch.max(x, 1)
@@ -212,19 +226,19 @@ class training_protocol():
                 target_inputs = torch.cat((target_inputs, inputs[i].unsqueeze(0)), 0)
         return source_inputs, target_inputs
     
-    def train(self, source_index_dict, source_features, source_labels, target_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs):
+    def train(self, source_index_dict, source_features, source_labels, target_loader, Cs, content_clf, Ss, Rs, Ct, St, Rt, CD, epochs):
         print("Training")
         m = nn.Softmax(dim=1)
         loss_ = nn.CrossEntropyLoss()
         loss_mse = nn.MSELoss()
-        optimizer = optim.SGD([{"params":Ct.parameters(), "lr": 0.001},{"params":St.parameters(), "lr": 0.0},{"params":Rt.parameters(), "lr": 0.0},{"params":CD.parameters(), "lr": 0.0}])
+        optimizer = optim.SGD([{"params":Ct.parameters(), "lr": 0.0001},{"params":St.parameters(), "lr": 0.0},{"params":Rt.parameters(), "lr": 0.0},{"params":CD.parameters(), "lr": 0.0}])
         epoch_loss = list()
         for epoch in range(epochs):  # loop over the dataset multiple times
             batch_loss = list()
             for i, data in enumerate(target_loader, 0):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, _ = data[0].float(), data[1]
-                source_inputs, target_inputs = self.check_confidence(inputs, Ct, 0.0, source_index_dict, source_features)
+                source_inputs, target_inputs = self.check_confidence(inputs, Ct,content_clf, 0.5, source_index_dict, source_features)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
@@ -233,7 +247,7 @@ class training_protocol():
                 perm = np.random.permutation(len(source_inputs))
                 source_content, source_style = Cs(source_inputs).detach(), Ss(source_inputs).detach()
                 target_content, target_style = Ct(target_inputs), St(target_inputs)
-                X1, X2 = source_inputs,  Rt(source_content[perm], source_style) 
+                X1, X2 = source_inputs,  Rt(target_content, source_style) 
                 Labels = torch.tensor(np.ones(len(source_inputs)), dtype = int).to(self.device)
                 
                 logits = CD(X1, X2)
