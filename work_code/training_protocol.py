@@ -211,7 +211,7 @@ class training_protocol():
                 print("epoch {} : Accuracy {:2f}".format(epoch, 100*(correct / total)))    
     
     
-    def check_confidence(self, inputs, Ct,content_clf, confidence, source_index_dict, source_features):
+    def check_confidence(self, inputs, labels, Ct, content_clf, confidence, source_index_dict, source_features):
         x = Ct(inputs).detach()
         x = content_clf(x).detach()
         m = nn.Softmax(dim=1)
@@ -220,10 +220,10 @@ class training_protocol():
         source_inputs = torch.tensor([]).to(self.device)
         target_inputs = torch.tensor([]).to(self.device)
         for i in range(len(values)):
-            if values[i]>=confidence:
-                c = random.choice(source_index_dict[indices[i].item()])
-                source_inputs = torch.cat((source_inputs, torch.tensor([source_features[c]]).float().to(self.device)), 0)
-                target_inputs = torch.cat((target_inputs, inputs[i].unsqueeze(0)), 0)
+            #if values[i]>=confidence:
+            c = random.choice(source_index_dict[labels[i].item()])
+            source_inputs = torch.cat((source_inputs, torch.tensor([source_features[c]]).float().to(self.device)), 0)
+            target_inputs = torch.cat((target_inputs, inputs[i].unsqueeze(0)), 0)
         return source_inputs, target_inputs
     
     def train(self, source_index_dict, source_features, source_labels, target_loader, Cs, content_clf, Ss, Rs, Ct, St, Rt, CD, epochs):
@@ -237,8 +237,8 @@ class training_protocol():
             batch_loss = list()
             for i, data in enumerate(target_loader, 0):
                 # get the inputs; data is a list of [inputs, labels]
-                inputs, _ = data[0].float(), data[1]
-                source_inputs, target_inputs = self.check_confidence(inputs, Ct,content_clf, 0.5, source_index_dict, source_features)
+                inputs, labels = data[0].float(), data[1]
+                source_inputs, target_inputs = self.check_confidence(inputs, labels, Ct,content_clf, 0.8, source_index_dict, source_features)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
@@ -251,7 +251,6 @@ class training_protocol():
                 Labels = torch.tensor(np.ones(len(source_inputs)), dtype = int).to(self.device)
                 
                 logits = CD(X1, X2)
-                pdb.set_trace()
                 loss = loss_(logits, Labels)
                 loss.backward()
                 optimizer.step()
