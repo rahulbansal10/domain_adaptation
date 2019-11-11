@@ -20,16 +20,6 @@ class content_module(nn.Module):
         content = F.relu(self.fc2(h_1))
         return content
 
-class content_classifier_module(nn.Module):
-    def __init__(self, num_classes=31, content_dim = 31):
-        super(content_classifier_module, self).__init__()
-        self.content_dim = content_dim
-        self.num_classes = num_classes
-        self.fc1 = nn.Linear(self.content_dim, self.num_classes)
-    
-    def forward(self, x):
-        logits = (self.fc1(x))
-        return logits
 
 
 class style_module(nn.Module):
