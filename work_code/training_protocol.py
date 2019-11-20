@@ -122,7 +122,7 @@ class training_protocol():
         loss_ent = HLoss().to(self.device)
         params = list(S.parameters()) + list(R.parameters())
         optimizer_enc = optim.Adam(params)
-        optimizer_adv = optim.SGD(adv_clf.parameters(), lr = 0.001)
+        optimizer_adv = optim.Adam(adv_clf.parameters(), lr = 0.001)
           
         epoch_adv_loss, epoch_rec_loss = list(), list()
         for epoch in range(epochs):  #loop over the dataset multiple times
@@ -151,7 +151,6 @@ class training_protocol():
                     optimizer_adv.step()
                     batch_adv_loss.append(loss2.item())
                 
-        
             if(epoch%5==0):
                 print("epoch {} : Adversarial Loss {:2f} Reconstruction Loss {:2f}".format(epoch, np.mean(batch_adv_loss),np.mean(batch_rec_loss)))   
         torch.save(S.state_dict(), "../modules/Ss_module")
@@ -168,11 +167,14 @@ class training_protocol():
                 content = C(features).detach()
                 m = nn.Softmax(dim=1)
                 outputs = m(content)
-                _, predicted = torch.max(outputs.data, 1)
+                val, predicted = torch.max(outputs.data, 1)
+                pdb.set_trace()
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
 
+        acc = 100 * (correct / total)
         print("Accuracy of the network on the data: {:2f}".format(100 * (correct / total)))
+        return acc
     
     def test_style(self, data_loader, S, adv_clf):
         correct = 0
@@ -242,6 +244,7 @@ class training_protocol():
         x = m(x)
         values, indices = torch.max(x, 1)
         #pdb.set_trace()
+        #y = (values>confidence)
         pos_source_inputs = torch.tensor([]).to(self.device)
         pos_target_inputs = torch.tensor([]).to(self.device)
         neg_source_inputs, neg_target_inputs = torch.tensor([]).to(self.device), torch.tensor([]).to(self.device)
@@ -252,7 +255,7 @@ class training_protocol():
                 c = random.choice(source_index_dict[indices[i].item()])
                 pos_source_inputs = torch.cat((pos_source_inputs, torch.tensor([source_features[c]]).float().to(self.device)), 0)
                 pos_target_inputs = torch.cat((pos_target_inputs, inputs[i].unsqueeze(0)), 0)
-        for i in range(4):
+        for i in range(2):
             perm = np.random.permutation(len(ind1))
             ind2 = ind1[perm]
             y = (ind1 == ind2)
@@ -263,7 +266,7 @@ class training_protocol():
         #pdb.set_trace()
         return source_inputs, target_inputs, Labels
     
-    def train(self, source_index_dict, source_features, source_labels, target_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs):
+    def train(self, source_index_dict, source_features, source_labels, target_features, target_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs):
         print("Training")
         m = nn.Softmax(dim=1)
         loss_ = nn.CrossEntropyLoss().to(self.device)
@@ -276,7 +279,7 @@ class training_protocol():
             for i, data in enumerate(target_loader, 0):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = data[0].float(), data[1]
-                source_inputs, target_inputs, Labels = self.check_confidence(inputs, labels, Ct, 0.7, source_index_dict, source_features)
+                source_inputs, target_inputs, Labels = self.check_confidence(inputs, labels, Ct, 0.2, source_index_dict, source_features)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
@@ -299,10 +302,8 @@ class training_protocol():
                 batch_loss.append(loss.item())
 
             if(epoch%10==0):
-                logits_t = Ct(inputs).detach()
-                probs_t = m(logits_t)
-                val_t, ind_t = torch.max(probs_t, 1)
-                accuracy_t = ((ind_t==labels).sum().item()/labels.shape[0])*100
+                accuracy_t = self.test_content(target_loader, Ct)
+                logits_t = Ct(torch.tensor(target_features).float().to(self.device)).detach()
                 entropy = loss_ent(logits_t).item()
                 print("epoch {} : Classification Loss {:2f} Entropy {:2f} Accuracy {:2f}".format(epoch, np.mean(batch_loss), entropy, accuracy_t))
         torch.save(Ct.state_dict(), "../modules/Ct_module")

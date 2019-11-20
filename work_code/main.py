@@ -6,6 +6,7 @@ from PIL import Image
 import numpy as np
 import os
 import pdb
+import torchvision
 from torchvision import models
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -17,7 +18,7 @@ from feature_extractor import VGG_FeatureExtractor
 from modules import content_module, style_module, reconstruction
 from modules import adv_classifier_module, domain_identifier_module, class_differentiator_module
 from training_protocol import training_protocol
-from testing import Test
+from testing import testing_protocol
 
 def read_data(filename):
     with open(filename, 'rb') as f:
@@ -35,7 +36,7 @@ class ResizeImage():
       th, tw = self.size
       return img.resize((th, tw))
     
-def transform_data(resize_size=224, crop_size=224):
+def transform_data(resize_size=28, crop_size=28):
   normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                    std=[0.229, 0.224, 0.225])
   return  transforms.Compose([
@@ -55,8 +56,8 @@ def get_features(G, data_loader):  # G is the feature extractor
     return X[1:], Y[1:]
 
 
-device = "cuda:0"
-# transform = transform_data()
+device = "cuda:1"
+transform = transform_data()
 # source = office_loader(name = "office/amazon_31_list.txt", transform = transform)
 # target = office_loader(name = "office/webcam_31_list.txt", transform = transform)
 # source_loader = DataLoader(source, batch_size = 64,shuffle = True)
@@ -78,6 +79,12 @@ labels = np.concatenate([source_labels, target_labels], axis = 0)
 features_dataset = feature_dataset(features, labels, device = device)
 source_features_dataset = feature_dataset(source_features, source_labels, device = device)
 target_features_dataset = feature_dataset(target_features, target_labels, device = device)
+
+
+# mnist = torchvision.datasets.MNIST(root="../", train=True, transform=None, target_transform=None, download=True)
+# svhn = torchvision.datasets.SVHN(root="../", split='train', transform=None, target_transform=None, download=True)
+# pdb.set_trace()
+
 
 features_loader = DataLoader(features_dataset, batch_size = 512, shuffle = True)
 source_features_loader = DataLoader(source_features_dataset, batch_size = 512, shuffle = True)
@@ -103,17 +110,23 @@ Rt.load_state_dict(Rs.state_dict())
 CD = class_differentiator_module().to(device)
 CD.load_state_dict(torch.load("../modules/CD_module"))
 ti = training_protocol(device)
+te = testing_protocol(device)
+
+
+
 
 
 # ti.train_content_module(data_loader = source_features_loader, C = Cs, epochs=200)
 # ti.train_style_module(data_loader = source_features_loader, C = Cs, S = Ss, R = Rs, adv_clf = adv_clf, epochs=500)
 # ti.train_class_differentiator_module(source_features_loader, CD, Cs, Ss, Rs, epochs=300)
 
-
-ti.test_content(target_features_loader, Cs)
-# ti.test_style(source_features_loader, Ss, adv_clf)
+#pdb.set_trace()
+#acc = ti.test_content(target_features_loader, Cs)
+# ti.test_style(target_features_loader, Ss, adv_clf)
 # ti.test_class_differentiator_module(source_features_loader, CD, Cs, Ss, Rs, epochs=1000)
 
-ti.train(source_index_dict, source_features, source_labels, target_features_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs=10000)
+# ti.train(source_index_dict, source_features, source_labels, target_features, target_features_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs=4000)
 # Ct.load_state_dict(torch.load("../modules/Ct_module"))
-ti.test_content(target_features_loader, Ct)
+# acc = ti.test_content(target_features_loader, Ct)
+
+te.train(source_index_dict, source_features, source_labels, target_features, target_features_loader, Cs, Ss, Rs, Ct, St, Rt, CD, epochs=4000)
